@@ -5,6 +5,8 @@ import authRoutes from "./routes/auth.route.js";
 import messageRoutes from "./routes/message.route.js";
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { connectToDB } from './lib/db.js';
+
 
 const __filename = fileURLToPath(import.meta.url);         // Converts the current file URL (like "file:///E:/Chat-APP/backend/src/server.js") to a regular path ("E:\Chat-APP\backend\src\server.js")
 const __dirname = path.dirname(__filename);                 // Extracts the directory name from the file path ("E:\Chat-APP\backend\src")
@@ -13,6 +15,8 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });      // Loads envir
 const app = express();
 
 const PORT = process.env.PORT || 3000;
+
+app.use(express.json());  //req.body
 
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
@@ -29,4 +33,5 @@ if(process.env.NODE_ENV === 'production'){
 
 app.listen(PORT, () => {
     console.log('Server is running on port ' + PORT);
+    connectToDB();
 });
