@@ -6,6 +6,7 @@ import messageRoutes from "./routes/message.route.js";
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { connectToDB } from './lib/db.js';
+import cookieParser from "cookie-parser";
 
 
 const __filename = fileURLToPath(import.meta.url);         // Converts the current file URL (like "file:///E:/Chat-APP/backend/src/server.js") to a regular path ("E:\Chat-APP\backend\src\server.js")
@@ -16,6 +17,7 @@ const app = express();
 const PORT = ENV.PORT || 3000;
 
 app.use(express.json());  //req.body
+app.use(cookieParser());
 
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
