@@ -7,6 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { connectToDB } from './lib/db.js';
 import cookieParser from "cookie-parser";
+import cors from "cors";
 
 
 const __filename = fileURLToPath(import.meta.url);         // Converts the current file URL (like "file:///E:/Chat-APP/backend/src/server.js") to a regular path ("E:\Chat-APP\backend\src\server.js")
@@ -17,6 +18,7 @@ const app = express();
 const PORT = ENV.PORT || 3000;
 
 app.use(express.json());  //req.body
+app.use(cors({origin : ENV.CLIENT_URL, credentials:true}))
 app.use(cookieParser());
 
 app.use("/api/auth", authRoutes);
