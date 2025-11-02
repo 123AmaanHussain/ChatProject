@@ -99,27 +99,70 @@ export const useChatStore=create((set,get)=>({
             return;
         }
         const socket = useAuthStore.getState().socket;
-        socket.on("newMessage", (newMessage)=>{
-
-           const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser._id
-           if(!isMessageSentFromSelectedUser){
-            return;
-           }
-           const currentMessages = get().messages;
+        
+        // Handle new messages
+        const handleNewMessage = (newMessage) => {
+            const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser._id;
+            if(!isMessageSentFromSelectedUser){
+                return;
+            }
+            const currentMessages = get().messages;
             set({messages:[...currentMessages, newMessage]});
             if(isSoundEnabled){
                 const notificationSound = new Audio("/sounds/notification.mp3");
-                
                 notificationSound.currentTime = 0; //reset to start
                 notificationSound.play().catch((e)=> console.log("Audio play failed", e));
             }
-           
-        })
+        };
+
+        // Handle message deletion
+        const handleMessageDeleted = ({ messageId }) => {
+            const currentMessages = get().messages;
+            // Only update if the message exists in the current view
+            if (currentMessages.some(msg => msg._id === messageId)) {
+                const updatedMessages = currentMessages.filter(msg => msg._id !== messageId);
+                set({ messages: updatedMessages });
+            }
+        };
+
+        // Set up event listeners
+        socket.on("newMessage", handleNewMessage);
+        socket.on("messageDeleted", handleMessageDeleted);
+
+        // Return cleanup function
+        return () => {
+            socket.off("newMessage", handleNewMessage);
+            socket.off("messageDeleted", handleMessageDeleted);
+        };
     },
-    unsubscribeFromMessages:()=>{
+    unsubscribeFromMessages: () => {
         const socket = useAuthStore.getState().socket;
+        // Remove all listeners to prevent memory leaks
         socket.off("newMessage");
+        socket.off("messageDeleted");
     },
     
-    
+    deleteMessage: async (messageId) => {
+        const { messages } = get();
+        try {
+            // Optimistic update - immediately remove the message
+            const updatedMessages = messages.filter(msg => msg._id !== messageId);
+            set({ messages: updatedMessages });
+            
+            // API call to delete the message on the server
+            const response = await axiosInstance.delete(`/messages/${messageId}`);
+            
+            if (!response.data.success) {
+                throw new Error(response.data.message || 'Failed to delete message');
+            }
+            
+        } catch (error) {
+            // Revert on error by refreshing messages from the server
+            const { selectedUser } = get();
+            if (selectedUser) {
+                get().getMessagesByUserId(selectedUser._id);
+            }
+            toast.error(error.response?.data?.message || "Failed to delete message");
+        }
+    },
 }))

@@ -20,11 +20,16 @@ export const getMessagesByUserId = async (req, res) => {
         const { id: userToChatId } = req.params;
 
         const message = await Message.find({
-            $or: [
-                { senderId: myId, receiverId: userToChatId },
-                { senderId: userToChatId, receiverId: myId }
+            $and: [
+                {
+                    $or: [
+                        { senderId: myId, receiverId: userToChatId },
+                        { senderId: userToChatId, receiverId: myId }
+                    ]
+                },
+                { deleted: { $ne: true } } // Exclude deleted messages
             ]
-        });
+        }).sort({ createdAt: 1 }); // Sort by creation time to maintain order
 
         res.status(200).json(message);
 
@@ -78,6 +83,59 @@ export const sendMessage = async (req, res) => {
     } catch (error) {
         console.log("Error in sendMessage:", error);
         res.status(500).json({ message: "Server error" });
+    }
+}
+
+export const deleteMessage = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user._id;
+
+        const message = await Message.findById(messageId);
+        
+        if (!message) {
+            return res.status(404).json({ message: "Message not found" });
+        }
+
+        // Only allow sender to delete the message
+        if (message.senderId.toString() !== userId.toString()) {
+            return res.status(403).json({ message: "Unauthorized to delete this message" });
+        }
+
+        // Soft delete by marking as deleted
+        message.deleted = true;
+        await message.save();
+
+        // Get socket IDs for both sender and receiver
+        const receiverSocketId = getReceiverSocketId(message.receiverId);
+        const senderSocketId = getReceiverSocketId(message.senderId);
+
+        // Notify both users about the message deletion
+        const deleteEvent = { 
+            messageId: message._id,
+            deleted: true
+        };
+
+        // Emit to receiver if online
+        if (receiverSocketId) {
+            io.to(receiverSocketId).emit("messageDeleted", deleteEvent);
+        }
+        
+        // Emit to sender if online and different from receiver
+        if (senderSocketId && senderSocketId !== receiverSocketId) {
+            io.to(senderSocketId).emit("messageDeleted", deleteEvent);
+        }
+
+        res.status(200).json({ 
+            success: true,
+            message: "Message deleted successfully" 
+        });
+    } catch (error) {
+        console.log("Error in deleteMessage:", error);
+        res.status(500).json({ 
+            success: false,
+            message: "Server error" 
+        });
     }
 }
 

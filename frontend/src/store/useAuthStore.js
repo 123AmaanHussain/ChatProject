@@ -80,25 +80,57 @@ export const useAuthStore = create((set, get) => ({
         }
     },
 
-    connectSocket : () => {
-        const {authUser} = get();
-        if(!authUser || get().socket?.connected){
+    connectSocket: () => {
+        const { authUser, socket: existingSocket } = get();
+        
+        // If already connected or no auth user, do nothing
+        if (!authUser || (existingSocket?.connected)) {
             return;
         }
-        const socket = io(BASE_URL, {withCredentials:true}); //this ensures cookies are connected with connection
-        socket.connect();
 
-        set({socket});
+        // Disconnect existing socket if any
+        if (existingSocket) {
+            existingSocket.disconnect();
+        }
 
-        //listen for online events
-        socket.on("getOnlineUsers", (userIds) => {
-            set({onlineUsers:userIds})
-        })
+        // Create new socket connection
+        const socket = io(BASE_URL, {
+            withCredentials: true,
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000
+        });
+
+        // Set up event listeners
+        socket.on('connect', () => {
+            console.log('WebSocket connected');
+            // Emit user online status
+            socket.emit('setup', authUser._id);
+        });
+
+        socket.on('disconnect', (reason) => {
+            console.log('WebSocket disconnected:', reason);
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('WebSocket connection error:', error);
+        });
+
+        // Listen for online users
+        socket.on('getOnlineUsers', (userIds) => {
+            set({ onlineUsers: userIds });
+        });
+
+        set({ socket });
     },
 
-    disconnectSocket : () => {
-        if(get().socket?.connected){
-            get().socket.disconnect()
+    disconnectSocket: () => {
+        const { socket } = get();
+        if (socket) {
+            socket.disconnect();
+            set({ socket: null, onlineUsers: [] });
         }
     }
 }));
